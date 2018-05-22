@@ -22,6 +22,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManagerNative;
 import android.app.ActivityOptions;
+import android.app.AlarmManager;
 import android.app.IActivityManager;
 import android.app.TaskStackBuilder;
 import android.content.ActivityNotFoundException;
@@ -68,6 +69,8 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
 
+import com.android.keyguard.KeyguardStatusView;
+import com.android.systemui.Dependency;
 import com.android.systemui.R;
 import com.android.systemui.recents.Recents;
 import com.android.systemui.recents.misc.SystemServicesProxy;
@@ -75,6 +78,8 @@ import com.android.systemui.slimrecent.ExpandableCardAdapter.ExpandableCard;
 import com.android.systemui.slimrecent.ExpandableCardAdapter.OptionsItem;
 import com.android.systemui.slimrecent.icons.IconsHandler;
 import com.android.systemui.stackdivider.WindowManagerProxy;
+import com.android.systemui.statusbar.policy.NextAlarmController;
+import com.android.systemui.statusbar.policy.NextAlarmController.NextAlarmChangeCallback;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
@@ -98,7 +103,7 @@ import static android.app.ActivityManager.StackId.RECENTS_STACK_ID;
  *
  * As well the actual click, longpress or swipe action methods are holded here.
  */
-public class RecentPanelView {
+public class RecentPanelView implements NextAlarmChangeCallback {
 
     private static final String TAG = "RecentPanelView";
 
@@ -177,6 +182,9 @@ public class RecentPanelView {
         sBitmapOptions = new BitmapFactory.Options();
         sBitmapOptions.inMutable = true;
     }
+
+    private NextAlarmController mNextAlarmController;
+    private String mAlarm = "";
 
     private static final int OPTION_INFO = 1001;
     //private static final int OPTION_MARKET = 1002;
@@ -407,6 +415,9 @@ public class RecentPanelView {
         buildCardListAndAdapter();
 
         setupItemTouchHelper();
+
+        mNextAlarmController = Dependency.get(NextAlarmController.class);
+        mNextAlarmController.addCallback(this);
     }
 
     /**
@@ -1361,8 +1372,38 @@ public class RecentPanelView {
                 return info;
             }
         }
+
+        if (card.packageName.toLowerCase().contains("deskclock")
+                && !mAlarm.isEmpty()) {
+            return getClockWithAlarmTitle(card.appName);
+        }
+
         // no infos, return original app title
         return card.appName;
+    }
+
+    @Override
+    public void onNextAlarmChanged(AlarmManager.AlarmClockInfo nextAlarm) {
+        if (nextAlarm != null) {
+            mAlarm = KeyguardStatusView.formatNextAlarm(mContext, nextAlarm);
+            if (mController.isShowing()) {
+                int count = mCardAdapter.getItemCount();
+                for (int i = 0; i < count; i++) {
+                    RecentCard card = (RecentCard) mCardAdapter.getCard(i);
+                    if (card.packageName.toLowerCase().contains("deskclock")) {
+                        card.appName  = getClockWithAlarmTitle(card.appName);
+                        postnotifyItemChanged(mCardRecyclerView, card);
+                    }
+                }
+            }
+        } else {
+            mAlarm = "";
+        }
+    }
+
+    private String getClockWithAlarmTitle(String appName) {
+        final String icon = "\u23F2\uFE0E";
+        return appName + " " + "(" + icon + " " + mAlarm + ")";
     }
 
     private String getTrackInfo() {
