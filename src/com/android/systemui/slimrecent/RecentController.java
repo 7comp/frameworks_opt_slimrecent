@@ -1109,7 +1109,6 @@ public class RecentController implements RecentPanelView.OnExitListener,
             // force a new preloading on next Recents call after boot or a settings change
             // to refresh the panel before the user shows it again.
             mIsPreloaded = false;
-            }
         }
     }
 
